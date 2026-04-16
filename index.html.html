@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週末家事進度管理系統</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --bg: #f8f9fa; --success: #27ae60; --gold: #f1c40f; }
+        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 950px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        .header { text-align: center; border-bottom: 2px solid #eee; margin-bottom: 20px; padding-bottom: 10px; }
+        .date-selector { margin: 15px 0; font-weight: bold; color: #555; }
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 0.95rem; background-color: #fff; cursor: pointer; }
+        .user-select { width: 95px; }
+        h2 { color: var(--primary); font-size: 1.2rem; margin-top: 30px; background: #f1f4f6; padding: 10px 15px; border-radius: 6px; border-left: 6px solid var(--accent); }
+        .daily-header { border-left-color: #e67e22; background: #fff5eb; color: #d35400; }
+        .task-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .task-table th, .task-table td { border-bottom: 1px solid #eee; padding: 12px 10px; text-align: left; }
+        .task-table th { font-size: 0.9rem; color: #7f8c8d; background: #fafafa; }
+        .col-check { width: 50px; text-align: center; }
+        .completed { background-color: #f0fdf4; }
+        .completed .task-text { text-decoration: line-through; color: #95a5a6; }
+        input[type="checkbox"] { width: 22px; height: 22px; cursor: pointer; vertical-align: middle; }
+        .stats-board { margin-top: 40px; padding: 20px; background: #2c3e50; color: white; border-radius: 10px; display: flex; flex-wrap: wrap; justify-content: space-around; gap: 15px; }
+        .stat-item { text-align: center; min-width: 80px; }
+        .stat-name { font-size: 1rem; color: #bdc3c7; display: block; }
+        .stat-count { font-size: 2rem; font-weight: bold; color: var(--gold); }
+        .footer-btns { margin-top: 30px; display: flex; gap: 15px; }
+        button { flex: 1; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.3s; }
+        .btn-reset { background: #fee2e2; color: #dc2626; }
+        .btn-print { background: var(--success); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🏠 週末家事進度管理系統</h1>
+        <div class="date-selector">
+            選擇日期： <select id="weekSelect"></select>
+        </div>
+    </div>
+
+    <div id="taskList"></div>
+
+    <div class="stats-board">
+        <div class="stat-item"><span class="stat-name">爸爸</span><span id="score-爸爸" class="stat-count">0</span></div>
+        <div class="stat-item"><span class="stat-name">媽媽</span><span id="score-媽媽" class="stat-count">0</span></div>
+        <div class="stat-item"><span class="stat-name">云</span><span id="score-云" class="stat-count">0</span></div>
+        <div class="stat-item"><span class="stat-name">元</span><span id="score-元" class="stat-count">0</span></div>
+    </div>
+
+    <div class="footer-btns">
+        <button class="btn-print" onclick="window.print()">列印 / 存成PDF</button>
+        <button class="btn-reset" onclick="resetData()">清空本週進度</button>
+    </div>
+</div>
+
+<script>
+    // 1. 定義資料
+    const membersList = ["", "爸爸", "媽媽", "云", "元"];
+    const checkList = ["", "爸爸", "媽媽"];
+    const choreConfigs = [
+        { cat: "🕒 每日例行 (週六 & 週日皆需執行)", isDaily: true, items: ["除濕機倒水", "洗碗機清理/餐具收納", "洗衣服/晾曬", "清垃圾(含回收/剩菜)"] },
+        { cat: "🤖 掃地機週期維護", items: ["換水倒水", "清刷頭"] },
+        { cat: "🪴 清陽台", items: ["徹底吸地板", "擦檯面", "換紙箱", "洗地板"] },
+        { cat: "🚿 浴室一 (主臥)", items: ["洗手台物品整理擦拭", "地板牆壁刷霉斑", "排水口清理霉垢", "玻璃及鏡子水漬", "水龍頭水漬", "擦馬桶蓋內尿漬+刷馬桶"] },
+        { cat: "🚿 浴室二 (客衛)", items: ["洗手台物品整理擦拭", "地板牆壁刷霉斑", "排水口清理霉垢", "玻璃及鏡子水漬", "水龍頭水漬", "擦馬桶蓋內尿漬+刷馬桶"] },
+        { cat: "🍳 廚房深度清潔", items: ["爐台全部擦拭", "擦爐台前牆壁油汙", "擦抽油煙機油汙", "流理槽洗掉油黴+廚餘籃清洗+水龍頭水漬", "餐桌雜物收拾乾淨+濕抹布擦乾淨桌面油汙"] },
+        { cat: "🧺 其他衣物", items: ["洗毛巾、擦手布", "洗襪子"] }
+    ];
+
+    // 2. 初始化函數
+    window.onload = function() {
+        const select = document.getElementById('weekSelect');
+        let current = new Date(2026, 3, 18); // 4/18
+        const endLimit = new Date(2026, 5, 30); // 6月底
+
+        // 生成日期下拉選單
+        while (current <= endLimit) {
+            const y = current.getFullYear();
+            const m = (current.getMonth() + 1).toString().padStart(2, '0');
+            const d = current.getDate().toString().padStart(2, '0');
+            const sun = new Date(current);
+            sun.setDate(current.getDate() + 1);
+            const sm = (sun.getMonth() + 1).toString().padStart(2, '0');
+            const sd = sun.getDate().toString().padStart(2, '0');
+            
+            const opt = document.createElement('option');
+            opt.value = `${y}-${m}-${d}`;
+            opt.text = `${y}/${m}/${d} - ${sm}/${sd}`;
+            select.appendChild(opt);
+            current.setDate(current.getDate() + 7);
+        }
+
+        // 綁定事件：當選單更換時，重新載入
+        select.onchange = loadData;
+
+        // 啟動首次載入
+        loadData();
+    };
+
+    // 3. 渲染與載入資料
+    function loadData() {
+        const listDiv = document.getElementById('taskList');
+        const currentWeek = document.getElementById('weekSelect').value;
+        const storage = JSON.parse(localStorage.getItem('familyChore_V6') || '{}');
+        const weekData = storage[currentWeek] || {};
+        
+        listDiv.innerHTML = ''; // 清空內容
+
+        choreConfigs.forEach((group, gIdx) => {
+            let html = `<h2 class="${group.isDaily ? 'daily-header' : ''}">${group.cat}</h2>`;
+            html += `<table class="task-table"><thead><tr><th class="col-check">完成</th><th>項目</th><th style="width:110px">完成者</th><th style="width:110px">複核</th></tr></thead><tbody>`;
+            
+            group.items.forEach((item, iIdx) => {
+                const subItems = group.isDaily ? [item + " (六)", item + " (日)"] : [item];
+                subItems.forEach((title, sIdx) => {
+                    const id = `t-${gIdx}-${iIdx}-${sIdx}`;
+                    const saved = weekData[id] || { done: false, worker: "", checker: "" };
+                    
+                    html += `<tr id="row-${id}" class="${saved.done ? 'completed' : ''}">
+                        <td class="col-check"><input type="checkbox" id="ck-${id}" ${saved.done ? 'checked' : ''} onchange="save()"></td>
+                        <td class="task-text">${title}</td>
+                        <td><select id="do-${id}" onchange="save()">${membersList.map(m => `<option value="${m}" ${saved.worker === m ? 'selected' : ''}>${m}</option>`).join('')}</select></td>
+                        <td><select id="check-${id}" onchange="save()">${checkList.map(m => `<option value="${m}" ${saved.checker === m ? 'selected' : ''}>${m}</option>`).join('')}</select></td>
+                    </tr>`;
+                });
+            });
+            html += `</tbody></table>`;
+            listDiv.innerHTML += html;
+        });
+
+        calculateScores();
+    }
+
+    // 4. 儲存與即時更新
+    function save() {
+        const currentWeek = document.getElementById('weekSelect').value;
+        const data = {};
+        
+        const rows = document.querySelectorAll('tr[id^="row-"]');
+        rows.forEach(row => {
+            const id = row.id.replace('row-', '');
+            const ck = document.getElementById(`ck-${id}`).checked;
+            const worker = document.getElementById(`do-${id}`).value;
+            const checker = document.getElementById(`check-${id}`).value;
+
+            if(ck) row.classList.add('completed');
+            else row.classList.remove('completed');
+
+            data[id] = { done: ck, worker: worker, checker: checker };
+        });
+
+        let storage = JSON.parse(localStorage.getItem('familyChore_V6') || '{}');
+        storage[currentWeek] = data;
+        localStorage.setItem('familyChore_V6', JSON.stringify(storage));
+        
+        calculateScores();
+    }
+
+    // 5. 計算得分
+    function calculateScores() {
+        const scores = { "爸爸": 0, "媽媽": 0, "云": 0, "元": 0 };
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        
+        checkboxes.forEach(ck => {
+            if(ck.checked) {
+                const id = ck.id.replace('ck-', '');
+                const worker = document.getElementById(`do-${id}`).value;
+                if(scores.hasOwnProperty(worker)) scores[worker]++;
+            }
+        });
+
+        for (let name in scores) {
+            document.getElementById(`score-${name}`).innerText = scores[name];
+        }
+    }
+
+    function resetData() {
+        if(confirm('確定要清空本週所有勾選與完成者嗎？')) {
+            const currentWeek = document.getElementById('weekSelect').value;
+            let storage = JSON.parse(localStorage.getItem('familyChore_V6') || '{}');
+            delete storage[currentWeek];
+            localStorage.setItem('familyChore_V6', JSON.stringify(storage));
+            loadData();
+        }
+    }
+</script>
+
+</body>
+</html>
